@@ -108,6 +108,15 @@ To generate PDF into another folder.
 > CbxToPdf --output ../saved "./folder 1" 
 ```
 
+### Change options conversion images
+
+Just open the `config.ini` file, and change parameters into `IMAGE_MAGICK_ARGUMENTS`. By default, it equals to `IMAGE_MAGICK_ARGUMENTS=-resize 1200x1850 -format jpg` and the process convert all images by resazing it to 1200x1850 in jpeg format. For example if you want to use png format with no resize just change to :
+
+```ini
+; ./config.ini
+IMAGE_MAGICK_ARGUMENTS=-format png
+```
+
 
 ## About
 

@@ -23,7 +23,7 @@ CbxToPdf
 1. Get `./CbxToPdf.bat` and `config.ini` files. 
 
 
-2. CbxToPdf use [7-Zip](https://www.7-zip.org/) to unpack cbx files. It also use [ImageMagick](https://imagemagick.org/index.php) to convert images and generate PDF. To install this binary dependencies, you can use a package manager for Windows, like [chocolatey](https://chocolatey.org/).
+2. CbxToPdf use [7-Zip](https://www.7-zip.org/) to unpack archives cbx files. It also use [ImageMagick](https://imagemagick.org/index.php) to convert webp images in another format and finally generate PDF with converted images. To install this binary dependencies, you can use a package manager for Windows, like [chocolatey](https://chocolatey.org/).
 
 ```
 > choco install 7zip imagemagick
@@ -36,9 +36,10 @@ CbxToPdf
 [BinaryDependencies]
 ZIP_BIN="C:\Program Files\7-Zip\7z.exe"
 IMAGE_MAGICK_BIN="C:\Program Files\ImageMagick-7.1.1-Q16-HDRI\magick.exe"
+IMAGE_MAGICK_ARGUMENTS=-format png
 ```
 
-4. Test with
+4. Check with
 
 ```batch
 > CbxToPdf --help
@@ -52,7 +53,7 @@ IMAGE_MAGICK_BIN="C:\Program Files\ImageMagick-7.1.1-Q16-HDRI\magick.exe"
 Notes, if the given file have a blank space into this path, you need to put double quotes. The generated PDF is saved by default into `./output` folder.
 
 ```batch
-> CbxToPdf "./test/file 1.cbr"
+> CbxToPdf "./samples/file 1.cbr"
 
 ; Result
 ╔═════════════════════╗
@@ -82,7 +83,7 @@ You can give multiple relative path. The program search into these folders all c
 Only errors are printed in console output.
 
 ```batch
-> CbxToPdf --quiet "./folder 1" 
+> CbxToPdf --quiet "./samples" 
 ```
 
 ### Increase the level verbosity
@@ -91,13 +92,13 @@ Only errors are printed in console output.
 
 ```batch
 # Normal output
-> CbxToPdf -v "./folder 1"
+> CbxToPdf -v "./samples"
 
 # Info output
-> CbxToPdf -vv "./folder 1"
+> CbxToPdf -vv "./samples"
 
 # Debug output
-> CbxToPdf -vvv "./folder 1" 
+> CbxToPdf -vvv "./samples" 
 ```
 
 ### Change the output folder
@@ -105,16 +106,16 @@ Only errors are printed in console output.
 To generate PDF into another folder.
 
 ```batch
-> CbxToPdf --output ../saved "./folder 1" 
+> CbxToPdf --output "../another-output-folder" "./samples" 
 ```
 
 ### Change options conversion images
 
-Just open the `config.ini` file, and change parameters into `IMAGE_MAGICK_ARGUMENTS`. By default, it equals to `IMAGE_MAGICK_ARGUMENTS=-resize 1200x1850 -format jpg` and the process convert all images by resazing it to 1200x1850 in jpeg format. For example if you want to use png format with no resize just change to :
+Just open the `config.ini` file, and change parameters into `IMAGE_MAGICK_ARGUMENTS`. By default, it equals to `IMAGE_MAGICK_ARGUMENTS=-format png` and the process convert all images in png without change native resolution. For example if you want to use png format and resize all images just change to :
 
 ```ini
 ; ./config.ini
-IMAGE_MAGICK_ARGUMENTS=-format png
+IMAGE_MAGICK_ARGUMENTS=-resize 1200x1850 -format png
 ```
 
 
@@ -129,7 +130,9 @@ CbxToPdf is free and available as open source under the terms of the [MIT Licens
 Bug reports, reports a typo in documentation, comments, pull-request & Github stars are always welcome !
 
 ### Release
-CbxToPdf v1.0.0 - 29/05/2023
+
+- CbxToPdf v1.1.0 - 2023.10.23
+- CbxToPdf v1.0.0 - 2023.05.30
 
 
 ### License

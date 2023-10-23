@@ -1,14 +1,26 @@
-
 @echo off
 setlocal EnableDelayedExpansion
 
-:: ---------------------- ::
-:: CbxToPdf configuration ::
-:: ---------------------- ::
+
+
+:: ┌───────────────┐ ::
+:: │               │ ::
+:: │ Configuration │ ::
+:: │               │ ::
+:: └───────────────┘ ::
+
+:: Save current working dir with pushd (we use popd to restore it)
+pushd .
+
+:: Change the current working dir to the folder of this script
+set FOLDER_RUN=%cd%
+cd %~dp0
+set FOLDER_BATCH=%cd%
+cd %FOLDER_BATCH%
 
 :: Application constants
 set APPLICATION_NAME=CbxToPdf
-set APPLICATION_VERSION=1.0.0
+set APPLICATION_VERSION=1.1.0
 set FOLDER_SCRIPT=%~dp0
 set FOLDER_TEMP=%~dp0temp
 
@@ -17,7 +29,7 @@ set ARGUMENTS=%*
 set ARGUMENT_FILES=
 set OPTION_QUIET=0
 set OPTION_VERBOSE=1
-set OPTION_FOLDER_OUTPUT=%~dp0output\
+set OPTION_FOLDER_OUTPUT=!FOLDER_RUN!\output\
 set OPTION_HELP=0
 set OPTION_VERSION=0
 set OPTION_KEEP_FOLDER_TEMP=0
@@ -29,8 +41,7 @@ set COUNT_FILES=
 :: BinaryDependencies default values
 set ZIP_BIN="C:\Program Files\7-Zip\7z.exe"
 set IMAGE_MAGICK_BIN="C:\Program Files\ImageMagick-7.1.1-Q16-HDRI\magick.exe"
-set IMAGE_MAGICK_ARGUMENTS="-resize 1200x1850 -format jpg"
-
+set IMAGE_MAGICK_ARGUMENTS_MOGRIFY="-resize 1200x1850 -format jpg"
 
 :: ------------------------- ::
 :: ANSI Colors configuration ::
@@ -79,9 +90,12 @@ set _colorBackgroundBrightCyan=[106m
 set _colorBackgroundBrightWhite=[107m
 
 
-:: --------------------- ::
-:: Start CLI application ::
-:: --------------------- ::
+
+:: ┌───────────────────────┐ ::
+:: │                       │ ::
+:: │ Start CLI application │ ::
+:: │                       │ ::
+:: └───────────────────────┘ ::
 call :ReadIniConfig
 call :ReadCliArguments %*
 call :StartApplication %1
@@ -89,16 +103,18 @@ call :StopApplication 0
 exit /b 0
 
 
+:: ------------------------------------- ::
+:: Read configuration if config.ini file ::
+:: ------------------------------------- ::
 :ReadIniConfig
 call :ReadIniKey config.ini BinaryDependencies ZIP_BIN ZIP_BIN
 call :ReadIniKey config.ini BinaryDependencies IMAGE_MAGICK_BIN IMAGE_MAGICK_BIN
-call :ReadIniKey config.ini BinaryDependencies IMAGE_MAGICK_ARGUMENTS IMAGE_MAGICK_ARGUMENTS
+call :ReadIniKey config.ini BinaryDependencies IMAGE_MAGICK_ARGUMENTS_MOGRIFY IMAGE_MAGICK_ARGUMENTS_MOGRIFY
 exit /b 0
-
 
 :ReadIniKey <file> <section> <key> <result>
 if not exist %~1 (
-	call :Error "Unable to parse ini file The file ^(%_colorForegroundBrightWhite%%~1%_colorForegroundWhite%^) doesnt exist."
+	call :Error "Unable to parse the configuration file ^(%_colorForegroundBrightWhite%%~1%_colorForegroundWhite%^) doesnt exist." true
 	call :StopApplication 1
 )
 set %~4=
@@ -130,9 +146,12 @@ endlocal
 exit /b 0
 
 
+:: ---------------------------- ::
+:: Read and parse CLI arguments ::
+:: ---------------------------- ::
 :ReadCliArguments <arguments_cli>
 set _=%~1
-if "%_:~,1%"=="-" ( 
+if "%_:~,1%"=="-" (
     if /i "%~1"=="-h" (
         set OPTION_HELP=1
     ) else if /i "%~1"=="--help" (
@@ -160,7 +179,7 @@ if "%_:~,1%"=="-" (
     ) else if /i "%~1"=="--keep-folder-temp" (
         set OPTION_KEEP_FOLDER_TEMP=1
     ) else (
-        call :Error "Use an unknown option: %_colorForegroundBrightWhite%%~1" 1
+        call :Error "Use an unknown option: %_colorForegroundBrightWhite%%~1" true
         call :StopApplication 1
         exit /b 0
     )
@@ -174,6 +193,9 @@ exit /b 0
 
 
 
+:: ----------------- ::
+:: Start application ::
+:: ----------------- ::
 :StartApplication
 setlocal EnableDelayedExpansion
 
@@ -187,7 +209,7 @@ if %OPTION_QUIET% == 1 (
     set OPTION_VERBOSE=0
 )
 if %OPTION_VERBOSE% gtr 2 (
-    set IMAGE_MAGICK_ARGUMENTS=%IMAGE_MAGICK_ARGUMENTS% -monitor
+    set IMAGE_MAGICK_ARGUMENTS_MOGRIFY=%IMAGE_MAGICK_ARGUMENTS_MOGRIFY% -monitor
 )
 
 :: Show help by default, if no options/arguments is given
@@ -209,20 +231,35 @@ if %OPTION_VERSION% == 1 (
 :: Show application and launch conversion of cbx files given in CLI arguments
 call :Splashscreen
 
+:: Check binary dependencies
+set BIN_DEPENDENCIES=true
+if not exist %ZIP_BIN% (
+    call :Error "CbxToPdf use 7-Zip to unpack CBX file, but it was not found. You must install it (for example with 'choco install 7zip'), then after you need to update the config.ini file accordingly to the folder installation used." true
+    set BIN_DEPENDENCIES=false
+)
+if not exist %IMAGE_MAGICK_BIN% (
+    call :Error "CbxToPdf use ImageMagick to convert webp images, but it was not found. You must install it (for example with 'choco install imagemagick'), then after you need to update the config.ini file accordingly to the folder installation used." true
+    set BIN_DEPENDENCIES=false
+)
+if %BIN_DEPENDENCIES% == false (
+	call :StopApplication 1
+)
+
+
 call :Newline
 call :Log "╔═════════════════════╗"
-call :Log "║  1. Initialization  ║" 
+call :Log "║  1. Initialization  ║"
 call :Log "╚═════════════════════╝"
 call :Debug "Enable ASCII Control-Character Graphics by setting the console codepage to: 65001"
 call :ResolveOutputFolder
 call :DebugApplication
-call :ResolveArgumentFiles
 call :CreateTempFolder
+call :ResolveArgumentFiles
 call :CheckCbxFiles
 
 call :Newline
 call :Log "╔════════════════════════╗"
-call :Log "║  2. Convert cbx files  ║" 
+call :Log "║  2. Convert cbx files  ║"
 call :Log "╚════════════════════════╝"
 call :IterateCbxFiles
 
@@ -232,22 +269,22 @@ exit /b 0
 
 :Splashscreen
 setlocal EnableDelayedExpansion
-if %OPTION_VERBOSE% gtr 0 ( 
+if %OPTION_VERBOSE% gtr 0 (
 	call :GetConsoleWidth
-	set topic[0]=    ██████╗  ██╗   
-	set topic[1]=   ██╔════╝    ║   %APPLICATION_NAME% - v%APPLICATION_VERSION% 
-	set topic[2]=   ███████   ██║   
+	set topic[0]=    ██████╗  ██╗
+	set topic[1]=   ██╔════╝    ║   %APPLICATION_NAME% - v%APPLICATION_VERSION%
+	set topic[2]=   ███████   ██║
 	set topic[3]=   ██    ██╗ ██║   Copyright © 2023
 	set topic[4]=   ╚██████╔╝ ██║   https://github.com/v20100v/
-	set topic[5]=    ╚═════╝  ╚═╝   
+	set topic[5]=    ╚═════╝  ╚═╝
 
 	echo:
 	call :HorizontalRule
 	echo:
 	echo:
-	for /l %%i in (0,1,5) do ( 
+	for /l %%i in (0,1,5) do (
 		set str=!topic[%%i]!
-		set str=!str:█=%_colorForegroundBlue%█%_colorReset%!	
+		set str=!str:█=%_colorForegroundBlue%█%_colorReset%!
 		echo !str!
 	)
 	echo:
@@ -277,7 +314,7 @@ echo   %_colorForegroundBrightBlue%--version%_colorReset%              Display t
 echo.
 echo Examples:
 echo   ^> %APPLICATION_NAME% my-file.cbr
-echo   ^> %APPLICATION_NAME% -vv -output-path ./out/of/space/ --keep-folder-temp my-file.cbz  
+echo   ^> %APPLICATION_NAME% -vv -output-path ./out/of/space/ --keep-folder-temp my-file.cbz
 echo   ^> %APPLICATION_NAME% my-file1.cbr ../foo/my-file2.cbr c:/bar/my-file3.cbz
 echo   ^> %APPLICATION_NAME% "./out of space/my file with spaces.cbr"
 echo   ^> %APPLICATION_NAME% ./my-folder/*.cbr
@@ -286,10 +323,11 @@ echo   ^> %APPLICATION_NAME% ./my-folder
 echo.
 echo CbxToPdf is free and available as open source under the terms of the MIT License.
 echo But you can buy me a coffee here : %_colorForegroundBrightBlue%https://www.buymeacoffee.com/vincent.blain%_colorReset%
+echo.
 exit /b 0
 
 
-:ResolveOutputFolder 
+:ResolveOutputFolder
 set FOLDER_OUTPUT=%OPTION_FOLDER_OUTPUT%
 for %%x in ("%OPTION_FOLDER_OUTPUT%\") do set FOLDER_OUTPUT=%%~dpx
 if not exist "%FOLDER_OUTPUT%" (
@@ -302,17 +340,16 @@ exit /b 0
 
 
 :ResolveArgumentFiles
+cd !FOLDER_RUN!
 set FULLPATHS=
 set COUNT_FULLPATHS=0
+
 for %%d in (%ARGUMENT_FILES%) do (
     set /a COUNT_FULLPATHS = COUNT_FULLPATHS + 1
-    set file=%%d
-    for %%x in (!file!) do (
-        set fullpath=%%~fx
-    )
-    set FULLPATHS=!FULLPATHS! "!fullpath!"
+
+    set FULLPATHS=!FULLPATHS! "%%~fd"
 )
-call :Debug "Parse fullpaths: %FULLPATHS%"
+call :Debug "Parsing the given fullpaths: %_colorForegroundBrightBlue%!FULLPATHS!%_colorReset%"
 call :Debug "Check the %_colorForegroundBrightBlue%%COUNT_FULLPATHS%%_colorReset% fullpath given in ARGUMENT_FILES."
 
 if %COUNT_FULLPATHS% == 0 (
@@ -326,13 +363,19 @@ set ARGUMENT_FILES=
 for %%x in (!FULLPATHS!) do (
     set item=%%x
     if exist !item!\* (
-        call :Debug " - Item %%i: %_colorForegroundBrightBlue%!item!%_colorReset% - Is a valid directory"
+        if %OPTION_VERBOSE% gtr 2 (
+            echo [DEBUG]  - Item: %_colorForegroundBrightBlue%!item!%_colorReset% - Is a valid directory
+        )
         set item=!item!\*.cbr !item!\*.cbz
     ) else (
         if exist !item! (
-            call :Debug " - Item %%i: %_colorForegroundBrightBlue%!item!%_colorReset% - Is a valid file"
+            if %OPTION_VERBOSE% gtr 2 (
+                echo [DEBUG]  - Item: %_colorForegroundBrightBlue%!item!%_colorReset% - Is a valid file
+            )
         ) else (
-            call :Debug " - Item %%i: %_colorForegroundBrightBlue%!item!%_colorReset% - Is a unvalid file/directory. It's does not exist."
+            if %OPTION_VERBOSE% gtr 2 (
+                echo [DEBUG]  - Item: %_colorForegroundBrightBlue%!item!%_colorReset% - Is a unvalid file/directory. It's does not exist.
+            )
             if not %OPTION_VERBOSE% gtr 2 (
                 if !has_error! == 0 (echo:)
             )
@@ -346,41 +389,44 @@ if %has_error% == 1 (
     call :StopApplication 1
 )
 
-set ARGUMENT_FILES=!ARGUMENT_FILES:~0,-1!
+set FILES_TO_PARSED=!ARGUMENT_FILES:~0,-1!
 exit /b 0
 
 
 :DebugApplication
-call :Debug "CLI arguments: %_colorForegroundBrightBlue%%ARGUMENTS%%_colorReset%"
-call :Debug ZIP_BIN: %_colorForegroundBrightBlue%%ZIP_BIN%%_colorReset%
-call :Debug IMAGE_MAGICK_BIN: %_colorForegroundBrightBlue%%IMAGE_MAGICK_BIN%%_colorReset%
-call :Debug IMAGE_MAGICK_ARGUMENTS: %_colorForegroundBrightBlue%%IMAGE_MAGICK_ARGUMENTS%%_colorReset%
-call :Debug FOLDER_SCRIPT: %_colorForegroundBrightBlue%%FOLDER_TEMP%%_colorReset%
-call :Debug FOLDER_TEMP: %_colorForegroundBrightBlue%%FOLDER_TEMP%%_colorReset%
-call :Debug FOLDER_OUTPUT: %_colorForegroundBrightBlue%%FOLDER_OUTPUT%%_colorReset%
-call :Debug OPTION_FOLDER_OUTPUT: %_colorForegroundBrightBlue%%OPTION_FOLDER_OUTPUT%%_colorReset%
-call :Debug OPTION_VERBOSE: %_colorForegroundBrightBlue%%OPTION_VERBOSE%%_colorReset%
-call :Debug OPTION_KEEP_FOLDER_TEMP: %_colorForegroundBrightBlue%%OPTION_KEEP_FOLDER_TEMP%%_colorReset%
-call :Debug ARGUMENT_FILES: %_colorForegroundBrightBlue%%ARGUMENT_FILES%%_colorReset%
+if %OPTION_VERBOSE% gtr 2 (
+    echo [DEBUG] CLI arguments: %_colorForegroundBrightBlue%%ARGUMENTS%%_colorReset%
+    echo [DEBUG] ZIP_BIN: %_colorForegroundBrightBlue%%ZIP_BIN%%_colorReset%
+    echo [DEBUG] IMAGE_MAGICK_BIN: %_colorForegroundBrightBlue%%IMAGE_MAGICK_BIN%%_colorReset%
+    echo [DEBUG] IMAGE_MAGICK_ARGUMENTS_MOGRIFY: %_colorForegroundBrightBlue%%IMAGE_MAGICK_ARGUMENTS_MOGRIFY%%_colorReset%
+    echo [DEBUG] FOLDER_RUN: %_colorForegroundBrightBlue%%FOLDER_RUN%%_colorReset%
+    echo [DEBUG] FOLDER_SCRIPT: %_colorForegroundBrightBlue%%FOLDER_SCRIPT%%_colorReset%
+    echo [DEBUG] FOLDER_TEMP: %_colorForegroundBrightBlue%%FOLDER_TEMP%%_colorReset%
+    echo [DEBUG] FOLDER_OUTPUT: %_colorForegroundBrightBlue%%FOLDER_OUTPUT%%_colorReset%
+    echo [DEBUG] OPTION_FOLDER_OUTPUT: %_colorForegroundBrightBlue%%OPTION_FOLDER_OUTPUT%%_colorReset%
+    echo [DEBUG] OPTION_VERBOSE: %_colorForegroundBrightBlue%%OPTION_VERBOSE%%_colorReset%
+    echo [DEBUG] OPTION_KEEP_FOLDER_TEMP: %_colorForegroundBrightBlue%%OPTION_KEEP_FOLDER_TEMP%%_colorReset%
+    echo [DEBUG] ARGUMENT_FILES: %_colorForegroundBrightBlue%%ARGUMENT_FILES%%_colorReset%
+)
 exit /b 0
 
 
 :CheckCbxFiles
-call :Debug "ARGUMENT_FILES is equals to: !ARGUMENT_FILES!
-call :Debug Check CBX files is launch now.
+call :Debug "Check CBX files is launch now."
+call :Debug "FILES_TO_PARSED is equals to: %_colorForegroundBrightBlue%!FILES_TO_PARSED!%_colorReset%
 
-if [!ARGUMENT_FILES!]==[] (
+if [!FILES_TO_PARSED!]==[] (
     call :Error "No cbx files found. You must give one or more file."
     call :StopApplication 1
 ) else (
     set COUNT_FILES=0
-    for %%x in (!ARGUMENT_FILES!) do (
+    for %%x in (!FILES_TO_PARSED!) do (
         set /a COUNT_FILES+=1
     )
-    call :Debug COUNT_FILES: %_colorForegroundBrightBlue%!COUNT_FILES!%_colorReset%
-    
+    call :Debug "We find %_colorForegroundBrightBlue%!COUNT_FILES!%_colorReset% files to parsed."
+
     set idx=0
-    for %%x in (!ARGUMENT_FILES!) do (      
+    for %%x in (!FILES_TO_PARSED!) do (
         set /a idx+=1
         set file=%%x
         set dirpath=%%~dpx
@@ -388,9 +434,9 @@ if [!ARGUMENT_FILES!]==[] (
         set filename=%%~nx
         set extension=%%~xx
         set checkCbxExtension=0
-                
+
         :: Debug
-        if %OPTION_VERBOSE% gtr 2 (         
+        if %OPTION_VERBOSE% gtr 2 (
             echo ---
             echo  file !idx!: %_colorForegroundBrightBlue%!file!%_colorReset%
             echo  dirpath: %_colorForegroundBrightBlue%!dirpath!%_colorReset%
@@ -398,33 +444,40 @@ if [!ARGUMENT_FILES!]==[] (
             echo  filename: %_colorForegroundBrightBlue%!filename!%_colorReset%
             echo  extension: %_colorForegroundBrightBlue%!extension!%_colorReset%
         )
-        
-        if "!extension!"==".cbz" set checkCbxExtension=1              
+
+        if "!extension!"==".cbz" set checkCbxExtension=1
         if "!extension!"==".cbr" set checkCbxExtension=1
         if !checkCbxExtension! == 0 (
             call :Error "You must give cbx file: %_colorForegroundBrightWhite%!file!"
             call :StopApplication 1
         )
-        
+
         if not exist !fullpath! (
             call :Error "The given file ^(%_colorForegroundBrightWhite%!fullpath!%_colorForegroundWhite%^) does not exist."
             call :StopApplication 1
-        )       
+        )
     )
     if %OPTION_VERBOSE% gtr 2 (
         echo ---
     )
-    
+
     if !COUNT_FILES!==1 (
         call :Log "Ok, one cbx file was found to be converted."
     ) else (
         if !COUNT_FILES! gtr 1 (
             call :Log "Ok, %_colorForegroundBrightBlue%!COUNT_FILES!%_colorReset% cbx files were found to be converted."
+			for %%x in (!FILES_TO_PARSED!) do (
+				set /a idx+=1
+				set file=%%x
+				if %OPTION_VERBOSE% gtr 0 (
+					echo - !file!
+				)
+			)
         ) else (
-            call :Error "Oh ^!, application does not found any cbx files to convert."
+            call :Error "Oh, application does not found any cbx files to convert." true
             call :StopApplication 1
         )
-    )    
+    )
 )
 exit /b 0
 
@@ -432,21 +485,45 @@ exit /b 0
 :IterateCbxFiles
 set idx=0
 for %%x in (%ARGUMENT_FILES%) do (
+    :: Timer for measuring time conversion of cbx file
+    set startTime=!time!
+
     set /a idx+=1
     set file=%%x
     set dirpath=%%~dpx
     set fullpath=%%~fx
     set filename=%%~nx
     set extension=%%~xx
-            
+
     if !COUNT_FILES! == 1 (
-        call :Log "Launch conversion of the file: %_colorForegroundBrightBlue%!filename!!extension!%_colorReset%"
+        call :Log "Launch conversion of : %_colorForegroundBrightBlue%!fullpath!%_colorReset%"
     ) else (
-        call :Log "[File !idx!/!COUNT_FILES!] Launch conversion of the file: %_colorForegroundBrightBlue%!filename!!extension!%_colorReset%"
+        call :Log "[!idx!/!COUNT_FILES!] Launch conversion of : %_colorForegroundBrightBlue%!filename!!extension!%_colorReset%"
     )
     call :UnpackArchive "!fullpath!" "%FOLDER_TEMP%\!filename!!extension!"\
 	call :ConvertWebpImages "%FOLDER_TEMP%\!filename!!extension!"\
 	call :GeneratePdf "%FOLDER_TEMP%\!filename!!extension!\" "%FOLDER_OUTPUT%" "!filename!"
+	if not %OPTION_KEEP_FOLDER_TEMP% == 1 (
+		rmdir /S/Q "%FOLDER_TEMP%\!filename!!extension!\"
+		call :Debug "Temp folder "%FOLDER_TEMP%\!filename!!extension!\" is deleted"
+	)
+
+	set endTime=!time!
+
+    for /f "tokens=1-4 delims=:.," %%a in ("!startTime!") do set start_h=%%a&set /a start_m=100%%b %% 100&set /a start_s=100%%c %% 100&set /a start_ms=100%%d %% 100
+    for /f "tokens=1-4 delims=:.," %%a in ("!endTime!") do set end_h=%%a&set /a end_m=100%%b %% 100&set /a end_s=100%%c %% 100&set /a end_ms=100%%d %% 100
+    set /a hours=!end_h!-!start_h!
+    set /a mins=!end_m!-!start_m!
+    set /a secs=!end_s!-!start_s!
+    set /a ms=!end_ms!-!start_ms!
+    if !ms! lss 0 set /a secs = !secs! - 1 & set /a ms = 100!ms!
+    if !secs! lss 0 set /a mins = !mins! - 1 & set /a secs = 60!secs!
+    if !mins! lss 0 set /a hours = !hours! - 1 & set /a mins = 60!mins!
+    if !hours! lss 0 set /a hours = 24!hours!
+    if 1!ms! lss 100 set ms=0!ms!
+    set /a totalsecs = !hours!*3600 + !mins!*60 + !secs!
+
+    call :Info "Time of conversion into PDF : !hours!:!mins!:!secs!.!ms! ^(!totalsecs!.!ms! secs total^)"
 	call :Newline
 )
 
@@ -456,18 +533,22 @@ if not %OPTION_KEEP_FOLDER_TEMP% == 1 (
 )
 
 if %OPTION_VERBOSE% gtr 0 (
-    echo Job is done ^^!
+    if !COUNT_FILES! == 1 (
+		echo Job is done ^^!
+    ) else (
+		echo Job is done, all !COUNT_FILES! files are converted ^^!
+    )
 )
-exit /b 0   
+exit /b 0
 
 
 :CreateTempFolder
 cd /d %~dp0
 if not exist "%FOLDER_TEMP%" (
-    call :Info "Attempt to create temp folder into: %_colorForegroundBrightBlue%%~dp0%_colorReset%"  
+    call :Info "Attempt to create temp folder into: %_colorForegroundBrightBlue%%~dp0%_colorReset%"
     mkdir "%FOLDER_TEMP%"
 ) else (
-    call :Info "Temp folder already exist, attempt to clean it into: %_colorForegroundBrightBlue%%~dp0%_colorReset%" 
+    call :Info "Temp folder already exist, attempt to clean it into: %_colorForegroundBrightBlue%%~dp0%_colorReset%"
     rmdir /S/Q "%FOLDER_TEMP%"
     mkdir "%FOLDER_TEMP%"
     call :Info "Clean folder is done."
@@ -476,17 +557,17 @@ exit /b 0
 
 
 :UnpackArchive <archive_file> <folder_extract>
-if %OPTION_VERBOSE% gtr 2 ( 
+if %OPTION_VERBOSE% gtr 2 (
     %ZIP_BIN% e %1 -y -o%2\
 ) else (
     %ZIP_BIN% e %1 -y -o%2\ > nul
 )
-call :Info "Uncompress file %_colorForegroundBrightBlue%"%1"%_colorReset% is done."
+call :Info "Uncompress cbx file in temp folder is done."
 exit /b 0
 
 
 :ConvertWebpImages <folder_images>
-call :Info "Try to convert webp images into %_colorForegroundBrightBlue%"%1"%_colorReset%."
+call :Debug "Try to convert webp images into %_colorForegroundBrightBlue%"%1"%_colorReset%."
 cd %1
 mkdir CONVERTED
 set count_webp_images=0
@@ -494,16 +575,18 @@ for %%x in (*.webp) do set /a count_webp_images+=1
 
 if %count_webp_images% gtr 0 (
     call :Info "We found %_colorForegroundBrightBlue%%count_webp_images%%_colorReset% webp images in %_colorForegroundBrightBlue%"%1"%_colorReset%. Start image conversion now."
-    
+
     set index_webp_image=0
     for %%x in (*.webp) do (
         set /a index_webp_image=index_webp_image+1
         set /a progress=!index_webp_image!00/!count_webp_images! >nul
-        %IMAGE_MAGICK_BIN% mogrify %IMAGE_MAGICK_ARGUMENTS% -path ./CONVERTED %%x
-        if %OPTION_VERBOSE% gtr 2 (
-            echo  - ^(!progress!^%% Image !index_webp_image!/!count_webp_images!^) %%x is converted
-        )       
+        %IMAGE_MAGICK_BIN% mogrify %IMAGE_MAGICK_ARGUMENTS_MOGRIFY% -path ./CONVERTED %%x
+        if %OPTION_VERBOSE% gtr 1 (
+            echo  - %IMAGE_MAGICK_BIN% mogrify %IMAGE_MAGICK_ARGUMENTS_MOGRIFY% -path ./CONVERTED %%x
+            echo   ^(!progress!^%% Image !index_webp_image!/!count_webp_images!^) %%x is converted
+        )
     )
+
     call :Info "All webp images are converted."
     del *.webp
     if %OPTION_VERBOSE% gtr 2 (
@@ -513,18 +596,21 @@ if %count_webp_images% gtr 0 (
     )
     rmdir CONVERTED
 ) else (
-    call :Info "We found no webp images in cbx file."
-    
+    call :Info "No webp images to convert were found in temp folder of cbx file."
 )
 cd %FOLDER_SCRIPT%
 exit /b 0
 
 
 :GeneratePdf <folder_images> <output> <cbx_name>
+call :Info "Start conversion into PDF."
 cd %1
-%IMAGE_MAGICK_BIN% convert *.* %3.pdf
-move %3.pdf %2>nul
-call :Log "Ok, the file %_colorForegroundBrightBlue%"%3.pdf"%_colorReset% was saved into %_colorForegroundBrightBlue%"%2"%_colorReset%"
+set outputpdf=%3.pdf
+set outputpdf_compress=%3-compress.pdf
+%IMAGE_MAGICK_BIN% convert *.* %outputpdf%
+
+move !outputpdf! %2>nul
+call :Info "Ok, the cbx file is converted in : %_colorForegroundBrightBlue%"%2"%_colorForegroundBrightBlue%"%3.pdf"%_colorReset%
 cd %FOLDER_SCRIPT%
 exit /b 0
 
@@ -536,29 +622,35 @@ if %OPTION_VERBOSE% gtr 0 (
 exit /b 0
 
 
-:Log <message>
-set message=%1
-set message=%message:"=%
+:Log <msg>
+set msg=%1
+set msg=%msg:"=%
+set "msg=%msg%"
+
 if %OPTION_VERBOSE% gtr 0 (
-    echo %message%
+    echo !msg!
 )
 exit /b 0
 
 
-:Info <message>
-set message=%1
-set message=%message:"=%
+:Info <msg>
+set msgInfo=%1
+set msgInfo=%msgInfo:"=%
+set "msgInfo=%msgInfo%"
+
 if %OPTION_VERBOSE% gtr 1 (
-    echo [INFO] %message%
+    echo [INFO] !msgInfo!
 )
 exit /b 0
 
 
-:Debug <message>
-set message=%*
-set message=%message:"=%
+:Debug <msg>
+set msgDebug=%1
+set msgDebug=%msgDebug:"=%
+set "msgDebug=%msgDebug%"
+
 if %OPTION_VERBOSE% gtr 2 (
-    echo [DEBUG] %message%
+    echo [DEBUG] !msgDebug!
 )
 exit /b 0
 
@@ -598,6 +690,10 @@ exit /b 0
 if %OPTION_VERBOSE% gtr 2 (
     echo:
 )
+
+call :Debug "Restore the previous working current dir save with pushd instruction"
+popd
+
 call :Debug "Restore the previous console codepage to: %CONSOLE_CODEPAGE%"
 chcp %CONSOLE_CODEPAGE%>NUL
 

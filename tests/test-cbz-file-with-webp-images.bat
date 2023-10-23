@@ -1,0 +1,1 @@
+..\src\CbxToPdf -vv ".\mock\cbx\file 3 with webp images.cbz"

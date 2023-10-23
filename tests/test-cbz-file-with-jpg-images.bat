@@ -1,0 +1,1 @@
+..\src\CbxToPdf -vv ".\mock\cbx\file 2 with jpg images.cbz"
